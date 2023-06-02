@@ -3,7 +3,7 @@ use walkdir::{DirEntry, WalkDir};
 
 /// 本地文件树
 #[derive(Parser, Debug)]
-#[command(author = "Alfred", version= "0.1.0", about, long_about = None, disable_help_flag = true, disable_version_flag = true)]
+#[command(author = "Alfred", version = "0.1.0", about, long_about = None, disable_help_flag = true, disable_version_flag = true)]
 struct Args {
     /// 文件树深度
     #[arg(short, long, default_value_t = 3)]
@@ -25,22 +25,37 @@ struct Args {
     #[arg(long, short)]
     path: bool,
 
+    /// 显示文件大小
+    #[arg(long, short)]
+    size: bool,
+
     /// 帮助
     #[arg(long, short, action = ArgAction::Help)]
     help: Option<bool>,
 
     /// 当前版本
     #[arg(long, short, action = ArgAction::Version)]
-    verion: Option<bool>,
+    version: Option<bool>,
 }
 
 fn main() {
-    let args = Args::parse();
+    match Args::try_parse() {
+        Ok(args) => {
+            parse_command(args);
+        }
+        Err(e) => {
+            println!("{}", e);
+        }
+    }
+}
+
+fn parse_command(args: Args) {
     let max_depth = args.depth;
     let show_hidden = args.a;
     let show_dir = args.dir;
     let show_file = args.file;
     let show_path = args.path;
+    let show_size = args.size;
     println!(".");
     WalkDir::new(".")
         .min_depth(1)
@@ -48,7 +63,7 @@ fn main() {
         .into_iter()
         .filter_entry(|e| is_not_hidden(e, show_hidden) && is_file(e, show_dir, show_file))
         .filter_map(|e| e.ok())
-        .for_each(|f| dispaly_file(f, show_path))
+        .for_each(|f| display_file(f, show_path, show_size))
 }
 
 fn is_not_hidden(entry: &DirEntry, show_hidden: bool) -> bool {
@@ -72,13 +87,25 @@ fn is_file(entry: &DirEntry, show_dir: bool, show_file: bool) -> bool {
     }
 }
 
-fn dispaly_file(entry: DirEntry, show_path: bool) {
+fn display_file(entry: DirEntry, show_path: bool, show_size: bool) {
     let depth = entry.depth();
     let s = "|--";
     let fix = "   |--".repeat(depth - 1);
     if show_path {
         let p_name = entry.path().display();
         println!("{}{}{}", s, fix, p_name);
+        return;
+    }
+    let metadata = entry.metadata();
+    let (is_file, len) = match metadata {
+        Ok(m) => {
+            (m.is_file(), m.len())
+        }
+        Err(_) => { (false, 0) }
+    };
+    if is_file && show_size {
+        let f_name = entry.file_name().to_str().unwrap_or_else(|| "未知文件");
+        println!("{}{}{} [{}KB]", s, fix, f_name, len / 1024);
         return;
     }
     let f_name = entry.file_name().to_str().unwrap_or_else(|| "未知文件");
